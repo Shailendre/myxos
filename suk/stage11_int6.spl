@@ -1,0 +1,117 @@
+alias physical_sp S0;
+physical_sp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+
+
+alias sys_call_no S1;
+sys_call_no=[physical_sp-1];
+
+
+
+if(sys_call_no==9)then
+
+	alias file_name S2;
+	file_name=[physical_sp-3];
+
+	alias fat S3;
+	fat=FAT;
+	alias basic_block S4;
+
+	while(fat < FAT+512)do
+
+		if([fat]==file_name)then
+			basic_block=[fat+2];
+			break;
+		endif;
+
+		fat=fat+8;
+	endwhile;
+
+	if(fat >= FAT+512)then
+		[physical_sp-2]=-1;
+		ireturn;
+	endif;
+
+
+	alias valid_page S5;
+	alias count S6;
+
+	count=0;
+	while(count < 3)do
+		if(([PTBR+count*2+1]=="01")||([PTBR+count*2+1]=="11"))then
+			valid_page=[PTBR+count*2];
+			[1280+valid_page]=[1280+valid_page]-1;
+		endif;
+
+		if(([PTBR+count*2+1]=="00")&&([PTBR+count*2]>=448))then
+			[512*6+[PTBR+count*2]]=[512*6+[PTBR+count*2]]-1;
+		endif;
+
+		count=count+1;
+
+	endwhile;
+
+	store(6,20);
+
+	load(1,basic_block);
+
+	count=0;
+
+	while(count < 3)do
+		[PTBR+count*2]=[512+count];
+		[PTBR+count*2+1]="00";
+		count=count+1;
+	endwhile;
+
+	[PTBR+7]="01";
+
+	alias counter S11;
+	alias current_pcb S12;
+	alias current_pid S13;
+	alias system_index S14;
+	counter=15;
+	current_pid=(PTBR-1024)/8;
+	current_pcb=(READY_LIST+32*current_pid);
+	while(counter < 31)do
+
+		if([current_pcb+counter] > -1)then
+			system_index=[current_pcb+counter];
+			[FILE_TABLE+2*system_index+1]=[FILE_TABLE+2*system_index+1]-1;
+			if([FILE_TABLE+2*system_index+1]==0)then
+				[FILE_TABLE+2*system_index]=-1;
+			endif;
+			[current_pcb+counter]=-1;
+			[current_pcb+counter+1]=-1;
+		endif;
+
+		counter=counter+2;
+	endwhile;
+
+	SP=512*3;
+	physical_sp=([PTBR+2*(SP/512)]*512)+SP%512;
+	
+	[physical_sp]=0; 
+	ireturn;
+endif;
+
+// for get pid
+
+if(sys_call_no==11)then
+ 	alias pid S2;
+	pid=(PTBR-1024)/8;
+	[physical_sp-2]=pid;
+	ireturn;
+endif;
+
+//for getppid
+if(sys_call_no==12)then
+	alias current_pid S2;
+	current_pid=(PTBR-1024)/8;
+
+	alias current_pcb S3;
+	current_pcb=READY_LIST+current_pid*32;
+
+	[physical_sp-2]=[(current_pcb+31)];
+	ireturn;
+endif;
+

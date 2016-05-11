@@ -1,0 +1,194 @@
+alias PhysicalSP S12;
+	PhysicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+
+alias Cause S0;
+	Cause = EFR % 10;
+	
+alias VPagenum S1;
+	VPagenum = (EFR / 10) % 100;
+	
+alias IP_addr S2;
+	IP_addr = (EFR / 1000);
+	
+alias currentPID S3;
+	currentPID = (PTBR - 1024)/8;
+		
+alias currentPCB S4;
+	currentPCB = READY_LIST + 32*currentPID;
+	
+alias per_process_index S5;
+	per_process_index = currentPCB + 15;
+		
+alias system_wide_index S6;
+		system_wide_index = FILE_TABLE;
+
+
+alias valid_page S7;
+//	PTBR = 1024 + currentPID*8;
+	
+alias count S8;
+
+alias counter S9;
+
+alias victim_page S10;
+
+alias PTBR1 S13;
+
+alias block S14;
+
+//....... causes exit the process....//	
+
+//print("START");
+
+if(Cause != 0) then
+	
+	if(Cause == 1) then
+		print("Illigal Instruction");
+	endif;
+	
+	if(Cause == 2) then
+		print("Illigal Memory Access");
+	endif;
+	
+	if(Cause == 3) then
+		print("Arithmatic Instruction");
+	endif;
+	
+	if(Cause == 4) then
+		print("Illigal Operannds");
+	endif;
+	
+	inline "JMP 11776";
+endif;
+	
+//.....if referenced to invalid address......//
+
+if([PTBR + VPagenum*2] == -1) then
+	print("Invalid Page Address");
+	inline "JMP 11776";
+endif;
+
+//print("START1");
+
+count = 24;
+
+//......search for a free page.....//
+
+while(count < 64) do
+	if([1280 + count] == 0) then
+		//print("INSIDE LOOP");
+		[1280 + count] = 1;
+		//print(count);
+		[PTBR + VPagenum*2] = count;
+		[PTBR + VPagenum*2 + 1] = "11";
+		break;
+	else
+		count = count + 1;
+	endif;
+endwhile;
+
+if(count < 64) then
+	SP = SP + 1;
+	PhysicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+	[PhysicalSP] = IP_addr;
+	ireturn;
+endif;
+//print("GOT PAGE");
+
+	
+//.........Replace the page using secong chance replacement algo...//
+
+if(count >= 64) then
+	
+	count = 0;
+	alias i S11;
+	
+	i = currentPID;
+	
+	while(count < 32) do	
+		
+		if(i == 32) then
+			i = 0;
+		else
+			
+		PTBR1 = 1024 + 8*i;
+		
+		counter = 0;
+//.....searching for victim page.....//
+
+		while(counter < 3) do
+				valid_page = [PTBR1 + counter*2];
+				
+				if([PTBR1 + counter*2 +1] == "01") then
+					if([1280 + valid_page] == 1) then
+						victim_page = [PTBR1 + counter*2];
+						i = 20;
+						break;
+						
+					endif;
+				endif;
+				
+				if([PTBR1 + counter*2 +1] == "11")then
+					if([1280 + valid_page] == 1) then
+						[PTBR1 + counter*2 + 1] = "01";
+					endif;
+				endif;
+				
+			counter = counter + 1;
+		endwhile;
+		endif;
+			if(i == 20) then
+				break;
+			endif;
+		i = i + 1;
+		count = count + 1;
+	endwhile;
+	
+	
+//....searching for a free block in swap area to replace victim page./	
+	
+	count = 448;
+	
+	while(count < 512) do
+		if([6*512 + count] == 0) then
+			store(victim_page,count);
+			[6*512 + count] = [6*512 + count] + 1;
+			[PTBR1 + counter*2] = count;
+			[PTBR1 + counter*2 + 1] = "00";
+			break;
+		endif;
+	endwhile;
+	
+	
+	if(count >= 512) then
+		inline "JMP 11776";
+	endif;
+	
+	//------------------
+	 if(([PTBR + 2 * VPagenum + 1] == "00") && ([PTBR + 2 * VPagenum] <= 447)) then
+	   load(victim_page,count);
+	   [PTBR + 2 * VPagenum] = victim_page;
+	   [PTBR + 2 * VPagenum + 1] = "11";
+	 endif;
+	 
+	 if(([PTBR + 2 * VPagenum + 1] == "00") && ([PTBR + 2 * VPagenum] >= 448)) then
+	   load(victim_page,count);
+	   [PTBR + 2 * VPagenum] = victim_page;
+	   [PTBR + 2 * VPagenum + 1] = "11";
+	   [6 * 512 + count] = [6 * 512 + count] + 1;
+	 endif;  
+	
+	//------------------
+	
+		store(6,20);
+	//endif;
+	//print("Complete");
+	
+	
+	SP = SP + 1;
+	PhysicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+	[PhysicalSP] = IP_addr;
+	
+	//print("OK");
+ireturn;
+endif;

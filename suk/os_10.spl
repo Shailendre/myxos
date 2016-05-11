@@ -1,0 +1,125 @@
+//............LOADING FAT AND DF FROM DISK.......//
+load(5,19);
+load(6,20);
+
+//............LOADING EXHANDLER AND INT7...........//
+load(7,1);
+load(8,2);
+
+load(23,17);
+load(24,18);
+
+//............LOADING INTERRUPTS..................//
+load(9,3);
+load(10,4);
+
+load(11,5);
+load(12,6);
+
+load(13,7);
+load(14,8);
+
+load(15,9);
+load(16,10);
+
+load(17,11);
+load(18,12);
+
+load(19,13);
+load(20,14);
+
+load(21,15);
+load(22,16);
+
+//........SETTING PID OF INIT PROCESS AS 0.......//
+
+[READY_LIST + 0] = 0;
+
+
+//..........SETTING MEMORY PAGES TO USED AND UNUSED..............//
+
+alias count_ S0;
+
+count_=0;
+
+while(count_ < 64) do
+	if(count_ <=25) then
+		[MEM_LIST + count_] = 1;
+	else
+		[MEM_LIST + count_] = 0;
+	endif;
+	count_=count_ + 1;
+endwhile;
+
+	print([1280 + 25]);
+	print([MEM_LIST + 26]); //....FOR STACK
+
+//............SETTING STATE OF ALL PCBS AS 0...................//
+
+alias counter S1;
+counter=0;
+
+while(counter < 32) do
+	[READY_LIST + 32*counter + 1] = 0;
+	counter = counter + 1;
+endwhile;
+
+
+//...........SETTING THE SYSTEM_WIDE_OPEN_FILE_TABLE AS INVALID_ENTRIES.........//
+
+alias count S2;
+count = 0;
+while(count < 128) do
+	[FILE_TABLE + count] = -1;
+	[FILE_TABLE + count + 1] = 0;
+	count = count + 2;
+endwhile;
+
+
+//..............SETTING INVALID ENTRIES FOR INIT PER_PROCESS_OPEN_FILE_TABLE.........//
+
+alias count1 S3;
+
+alias per_process_index S4;
+per_process_index = READY_LIST + 15;
+
+count1 = 0;
+
+while(count1 < 16) do
+	[per_process_index + count1] = -1;
+	[per_process_index + count1 + 1] = 0;
+	count1 = count1 + 2;
+endwhile;
+
+//...........SETTING PAGE_TABLE_ENTRIES FOR INIT PROCESS..........//
+
+PTBR = 1024;
+PTLR = 4;
+
+[PTBR+0] = 21;
+[PTBR+1] = "00";
+[PTBR+2] = 22;
+[PTBR+3] = "00";
+[PTBR+4] = 23;
+[PTBR+5] = "00";
+[PTBR+6] = 25;
+[PTBR+7] = "01";
+
+[READY_LIST+31]=0;
+
+
+SP = 3*512;				
+[25*512] = 0;				//STACK
+[READY_LIST + 1] = 2;		//STATE = RUNNUNG
+
+//..........SETTING SWAP AREA AS 0...........//
+
+count = 448;
+
+	while(count < 512) do
+		[DISK_LIST + count] = 0;
+		count = count + 1;
+	endwhile;
+
+store(6,20);
+ireturn;

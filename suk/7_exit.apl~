@@ -1,0 +1,10 @@
+integer main(){
+	integer pid,stat;
+	pid=Fork();
+	if(pid!=-2)then
+		stat=Exec("6even.xsm");
+	else
+		stat=Exec("6odd.xsm");
+	endif;
+	return 0;
+	}
