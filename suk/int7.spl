@@ -1,0 +1,130 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+alias basic_block S2;
+
+alias file_name S4;
+file_name = [physicalSP - 3];
+
+alias block S3;
+
+alias currentPID S5;
+		currentPID = (PTBR - 1024)/8;
+		
+alias currentPCB S6;
+	currentPCB = READY_LIST + 32*currentPID;
+	
+alias per_process_index S7;
+	per_process_index = currentPCB + 15;
+		
+alias system_wide_index S8;
+		system_wide_index = FILE_TABLE;
+		
+alias FAT1 S9;
+	FAT1 =FAT;
+	
+alias count S12;
+	
+if(sysCallNo == 10) then
+	
+	count = 0;
+//......SEARCHING FOR A PROCESS IN READY STATE........//	
+	while(count < 32) do
+		if([READY_LIST + 32*count + 1] == 1) then
+			break;
+		else
+			count = count + 1;
+		endif;
+		endwhile;
+		
+	if(count >= 32) then
+		halt;
+		ireturn;
+	endif;
+	
+	
+//......CLOSING ALL THE OPENED FILES.....//
+
+	count = 0;
+	
+	while(count < 8) do
+		if([per_process_index + count*2] != -1) then
+			system_wide_index = [per_process_index + count*2+0];
+			[FILE_TABLE + system_wide_index * 2 + 1] = [FILE_TABLE + system_wide_index*2 + 1] - 1;
+			
+			if([FILE_TABLE + system_wide_index*2 + 1] == 0) then
+				[FILE_TABLE + system_wide_index *2 +0] = -1;
+			endif;
+			
+			[per_process_index + count*2] = -1;
+			[per_process_index + count*2 + 1] = -1;
+			
+		endif;
+		count = count + 1;
+	endwhile;
+	
+	[currentPCB + 1] = 0; //STATE IS SET TO BE 0
+	
+	count = 0;
+//........MODIFICATION............//
+	while(count < 3) do
+		if(([PTBR+2*count + 1] == "01") || ([PTBR+2*count + 1] == "11")) then
+			if([PTBR + 2*count] < 447)then
+				[PTBR + 2*count] = [PTBR + 2*count] - 1;
+			endif;
+		 	if([PTBR + 2*count] >= 448)then
+		 		block = [PTBR + 2*count];
+		 		[6*512 + block] = [6*512 + block] - 1;
+		 	endif;
+		endif;
+		count = count + 1;
+	endwhile;
+	
+	store(6,20);
+//................DONE MODIFICATION.............//	
+	count = 0;
+	alias counter S13;
+	counter=currentPID;
+alias newPCB S10;
+
+//........SEARCHING OTHER READY PROCESS...........//
+	while(count < 32) do
+		counter=counter+1;
+		if(counter==32)then
+			counter=0;
+		endif;
+			
+		if([READY_LIST + 32*counter + 1] == 1) then
+			newPCB = READY_LIST + 32*counter;
+			break;
+		else
+			count = count + 1;
+		endif;
+		endwhile;
+		
+//........SETTING THE PCB FOR NEW READY PROCESS...........//
+
+	BP=[newPCB+2];
+	SP=[newPCB+3];
+	R0=[newPCB+7];
+	R1=[newPCB+8];
+	R2=[newPCB+9];
+	R3=[newPCB+10];
+	R4=[newPCB+11];
+	R5=[newPCB+12];
+	R6=[newPCB+13];
+	R7=[newPCB+14];
+	PTBR=[newPCB+5];
+	PTLR=[newPCB+6];
+
+	SP = SP + 1;
+	alias newphysicalSP S11;
+	newphysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+	[ newphysicalSP ] = [ newPCB + 4 ];
+	[newPCB+1] = 2;
+	
+ireturn;
+endif;

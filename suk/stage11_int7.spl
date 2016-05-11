@@ -1,0 +1,226 @@
+alias PhysicalSP S0;
+  PhysicalSP = ([PTBR + 2 * (SP/ 512)] * 512) + (SP % 512);
+  
+alias SystemCallNo S1;
+  SystemCallNo = [PhysicalSP - 1];
+
+
+alias CurrentPCB S14;
+
+if(SystemCallNo==14)then
+	alias CurrentPID S2;
+	CurrentPID=(PTBR-1024)/8;
+
+	alias Counter S3;
+	Counter=1;
+	while(Counter < 32*32)do
+		if([READY_LIST+Counter]==(100+CurrentPID))then
+			[READY_LIST+Counter]=1;
+		endif;
+		Counter=Counter+32;
+	endwhile;
+	[PhysicalSP-2]=0;
+	ireturn;	
+endif;	
+
+//----------------------
+
+  
+if(SystemCallNo < 13) then
+//---
+	 alias CurrentPID S3;
+    CurrentPID = (PTBR - 1024) / 8;
+    
+	
+    CurrentPCB = READY_LIST + 32 * CurrentPID;
+//--
+  alias Counter S2;
+
+	Counter=1;
+	while(Counter < 32*32)do
+		if([READY_LIST+Counter]==(100+CurrentPID))then
+			[READY_LIST+Counter]=1;
+		endif;
+		Counter=Counter+32;
+	endwhile;
+
+    Counter = 1;
+
+	//print("exhandler 1");    
+
+  while(Counter < 32 * 32) do
+    if([READY_LIST + Counter] == 1) then
+      break;
+    endif;
+    
+    Counter = Counter + 32;
+  endwhile;
+  
+  if(Counter > 32 * 32) then
+    halt;
+    ireturn;
+  endif;
+  
+  alias System_Wide_Index S5;
+    System_Wide_Index = -1;
+    
+  Counter = 15;
+  
+  while(Counter < 31) do
+    if([CurrentPCB + Counter] != -1) then
+      System_Wide_Index = [CurrentPCB + Counter];
+      [FILE_TABLE + (System_Wide_Index * 2) + 1] = [FILE_TABLE + (System_Wide_Index * 2) + 1] - 1;
+      
+      if([FILE_TABLE + (System_Wide_Index * 2) + 1] == 0) then
+        [FILE_TABLE + (System_Wide_Index * 2)] = -1;
+      endif;
+      
+      [CurrentPCB + Counter] = -1;
+      [CurrentPCB + Counter + 1] = -1;
+    endif;
+    Counter = Counter + 2;
+  endwhile;
+  
+  [CurrentPCB + 1] = 0;
+  
+  alias Page_No S6;
+    Page_No = -1;
+    
+  Counter = 0;
+  
+  while(Counter < 4) do
+	if(([PTBR+Counter*2+1]=="01") ||([PTBR+Counter*2+1]=="11"))then	
+    		Page_No = [PTBR + Counter*2];
+    		[1280 + Page_No] = [1280+Page_No]-1;
+	endif;
+
+	if(([PTBR+Counter*2+1]=="00")&&([PTBR+Counter*2] >=448))then
+		Page_No=[PTBR+Counter*2];		
+		[3072+Page_No]=[3072+Page_No]-1;
+		store(6,20);
+	endif;
+
+    	[PTBR + Counter*2 + 1] = "00"; //unreferenced and unvalid
+	[PTBR + Counter*2] = -1;     //deallocation
+    	
+
+    Counter = Counter + 1;
+  endwhile;
+  
+  alias Counter1 S7;
+    Counter1 = 0;
+    
+  Counter = CurrentPID;
+  
+  while(Counter1 < 32) do
+    Counter = Counter + 1;
+    
+    if(Counter == 32) then
+      Counter = 0;
+    endif;
+  
+    CurrentPCB = READY_LIST + Counter * 32;
+    
+    if([CurrentPCB + 1] == 1) then
+      break;
+    endif;
+    
+    Counter1 = Counter1 + 1;
+  endwhile;
+  
+endif;	
+	
+ 
+
+//for wait system call
+if(SystemCallNo==13)then
+	alias waiting_pid S2;
+	waiting_pid=[PhysicalSP-3];
+
+	alias CurrentPID S3;
+	CurrentPID=(PTBR-1024)/8;
+	
+	alias waiting_pcb S4;
+	waiting_pcb=READY_LIST+waiting_pid*32;
+
+	if(([waiting_pcb+1]==0) ||([waiting_pcb+1]==2))then
+		[PhysicalSP-2]=-1;
+	endif;
+
+	[PhysicalSP-2]=0;
+	
+	CurrentPCB=READY_LIST+CurrentPID*32;
+
+	[CurrentPCB+1]=100+waiting_pid;
+	[CurrentPCB+2]=BP;
+	[CurrentPCB+3]=SP-1;
+	[CurrentPCB+4]=[PhysicalSP];
+	[CurrentPCB+5]=PTBR;
+	[CurrentPCB+6]=PTLR;
+	[CurrentPCB+7]=R0;
+	[CurrentPCB+8]=R1;
+	[CurrentPCB+9]=R2;
+	[CurrentPCB+10]=R3;
+	[CurrentPCB+11]=R4;
+	[CurrentPCB+12]=R5;
+	[CurrentPCB+13]=R6;
+	[CurrentPCB+14]=R7;
+//abhishek
+	alias Counter1 S7;
+    Counter1 = 0;
+    
+	alias Counter S8;		
+  Counter = CurrentPID;
+  
+  while(Counter1 < 32) do
+    Counter = Counter + 1;
+    
+    if(Counter == 32) then
+      Counter = 0;
+    endif;
+  
+    CurrentPCB = READY_LIST + Counter * 32;
+    
+    if([CurrentPCB + 1] == 1) then
+      break;
+    endif;
+    
+    Counter1 = Counter1 + 1;
+  endwhile;
+
+ endif; 
+
+//-------------------
+
+//print("exhandler 3");
+
+
+	
+
+  [CurrentPCB + 1] = 2;
+  SP = [CurrentPCB + 3];
+  BP = [CurrentPCB + 2];
+  PTBR = [CurrentPCB + 5];
+  PTLR = [CurrentPCB + 6];
+  
+  R0 = [CurrentPCB + 7];
+  R1 = [CurrentPCB + 8];
+  R2 = [CurrentPCB + 9];                                    
+  R3 = [CurrentPCB + 10];
+  R4 = [CurrentPCB + 11];
+  R5 = [CurrentPCB + 12];
+  R6 = [CurrentPCB + 13];
+  R7 = [CurrentPCB + 14]; 
+  
+
+  SP = SP + 1;
+  
+  alias SP2 S8;
+    SP2 = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+    
+  [SP2] = [CurrentPCB + 4];
+ 
+  ireturn;
+   
+
+

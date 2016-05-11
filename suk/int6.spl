@@ -1,0 +1,190 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+alias basic_block S2;
+
+alias file_name S4;
+file_name = [physicalSP - 3];
+
+alias block S3;
+
+alias currentPID S5;
+		currentPID = (PTBR - 1024)/8;
+		
+alias currentPCB S6;
+	currentPCB = READY_LIST + 32*currentPID;
+	
+alias block_no S7;
+
+alias per_process_index S14;
+per_process_index = currentPCB + 15;
+		
+alias system_wide_index S8;
+		system_wide_index = FILE_TABLE;
+		
+alias FAT1 S9;
+	FAT1 =FAT;
+
+alias count S10;
+	count =0;
+	
+alias valid_pages S11;
+
+alias difference S12;
+
+alias counter S13;
+	counter =0;
+	
+//alias i S14;
+
+//............START EXEC SYSTEM CALL ...................//
+
+if(sysCallNo == 9) then
+	//print(file_name);
+	while(FAT1 < FAT+512) do
+		if([FAT1] == file_name ) then
+			basic_block = [FAT1 + 2];
+			break;
+		else
+			FAT1 = FAT1 + 8;
+		endif;
+	endwhile;
+	
+	
+	if(FAT1 >= FAT+512) then
+		//print(FAT1);
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	load(1,basic_block);
+	
+	block = 0;
+
+//... NO OF BLOCKS IN THE PROCESS ......//
+
+	while(count+512 <= 514) do
+		if([count + 512] != -1) then
+			block = block + 1;
+		endif;
+		count = count + 1;
+	endwhile;
+	
+	count = 0;
+	valid_pages = 0;
+//............ NO OF CODE PAGES IN THE PROCESS .....//
+	
+	while(counter < 6) do
+		if(([PTBR + counter + 1] == "01") || ([PTBR + counter +1] == "11")) then
+		valid_pages = valid_pages + 1;
+		endif;
+		counter = counter + 2;
+	endwhile;
+	
+	
+	counter = block;
+
+	
+//..........IF NUMBER IF PAGES ARE MORE THAN CODE BLOCKS.....//
+
+	if(valid_pages > block) then
+		difference = valid_pages - block;
+		while(difference > 0) do
+			count = [PTBR + block*2];  // FIND PAGE THAT IS TO BE INVALIDATE 
+			[MEM_LIST+ count] = 0;
+			[PTBR + block*2] = -1;
+			[PTBR + block*2 + 1] = "00";
+			block = block + 1;
+			difference = difference - 1;
+		endwhile;
+	endif;
+	
+	
+//....IF NUMBER OF PAGES ARE LESS THAN CODE BLOCKS.....//
+
+	block = counter;
+	counter = 0;
+	count = 0;
+	
+	if(valid_pages < block) then
+		difference = block - valid_pages;
+		
+//.....SEARCH FOR FREE PAGES IN MEMORY .....//
+
+			while(counter+1280 < 1344) do
+				if([counter + 1280] == 0) then
+					count = count + 1;
+				endif;
+				counter = counter + 1;
+			endwhile;
+			
+		if(count >= difference) then
+			counter = valid_pages;
+			count = 0;
+			while(difference > 0) do
+			
+				while(count + 1280 < 1344) do
+					if([count + 1280] == 0) then
+						block_no = count;
+						[count+1280]=1; //allocation;
+						break;
+					endif;
+					count=count+1;	
+				endwhile;
+				
+				[PTBR + counter*2] = block_no;
+				[PTBR + counter*2 + 1] = "01";
+
+				counter = counter + 1;
+				difference = difference -1;
+				
+			endwhile;
+		else
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+	endif;
+	
+	//valid_pages = counter;
+	counter = 0;
+//.....LOADING BLOCKS.......//
+
+	while(counter < block) do
+		valid_pages = [PTBR + counter*2];
+		[PTBR + counter*2 + 1] = "01";
+		block_no = [512 + counter];
+		load(valid_pages,block_no);
+		counter = counter + 1;
+	endwhile;
+
+//.... CLOSING ALL FILES OPEN BY CURRENT PROCESS......//
+
+	
+	count = 0;
+	
+	while(count < 32) do
+		if([per_process_index + count*2] != -1) then
+			system_wide_index = [per_process_index + count*2];
+			[FILE_TABLE + system_wide_index * 2 + 1] = [FILE_TABLE + system_wide_index*2 + 1] - 1;
+			
+			if([FILE_TABLE + system_wide_index*2 + 1] == 0) then
+				[FILE_TABLE + system_wide_index *2 +0] =-1;
+			endif;
+			
+			[per_process_index+ count*2] = -1;
+			[per_process_index+ count*2 + 1] = -1;
+		endif;
+		count = count + 1;
+	endwhile;
+	
+	SP = 3*512;
+	physicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+	[physicalSP] = 0;
+	
+endif;
+ireturn;
+	
+	

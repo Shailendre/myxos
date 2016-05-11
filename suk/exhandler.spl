@@ -1,0 +1,180 @@
+alias Cause S0;
+  Cause = EFR % 10;
+  
+alias Vpagenum S1;
+  Vpagenum = (EFR / 10) % 100;
+  
+alias Ip_addr S2;
+  Ip_addr = (EFR / 1000);
+ 
+alias Swap_Block S11;
+alias Mem_Page S8;
+alias Disk_Block S12;
+ 
+
+
+if(Cause != 0) then
+  
+  if(Cause == 1) then
+    print("Illegal");
+	print("instruction");	
+  endif;
+  
+  if(Cause == 2) then
+	print("Illegal");
+	print("memory acess");
+  endif;
+  
+  if(Cause == 3) then
+	print("Airthmatic");
+	print("exception");	
+  endif;
+  
+  if(Cause == 4) then
+    print("Illegal Operands");
+  endif;
+  
+  inline "JMP 11830";
+endif;
+
+if([PTBR + Vpagenum * 2] == -1) then
+  print("Invalid Page Address");
+  inline "JMP 11830";
+endif;         
+
+SP = SP +1;
+
+alias PhysicalSP S3;
+  PhysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+  
+alias Counter S4;
+  Counter = 0;
+  
+while(Counter < 64) do
+  if([1280 + Counter] == 0) then
+
+	Disk_Block = [PTBR + Vpagenum * 2];
+  
+	load(Counter,Disk_Block);
+
+	if(Disk_Block >= 448) then
+  		[3072 + Disk_Block] = [3072 + Disk_Block] - 1;
+  		store(6,20);
+	endif;
+	
+
+    [PTBR + Vpagenum * 2] =  Counter;
+    [PTBR + Vpagenum * 2 + 1] = "11";	
+    [PhysicalSP] = Ip_addr;
+    [1280 + Counter] = 1;
+    ireturn;
+  endif;
+  
+  Counter = Counter + 1;
+endwhile;
+
+alias CurrentPID S5;
+  CurrentPID = (PTBR - 1024) / 8;
+  
+alias CurrentPCB S6;
+  CurrentPCB = READY_LIST + 32 * CurrentPID;
+  
+alias Counter1 S7;
+  Counter1 = 0;
+  
+
+  Mem_Page = -1;
+  
+alias Flag S9;
+  Flag = 0;
+
+
+
+alias Process_PTBR S10;
+  Process_PTBR = -1;
+      
+Counter = CurrentPID;                     
+
+while(Counter <= 32) do
+  
+  if(Counter == 32) then
+    Counter = 0;
+  endif;  
+  
+  CurrentPCB = READY_LIST + 32 * Counter;
+  
+  Counter1 = 0;
+  
+  Process_PTBR = 8 * Counter + 1024;
+  
+  while(Counter1 < 6) do
+  
+    if([Process_PTBR + Counter1 + 1] == "11") then
+      Mem_Page = [Process_PTBR + Counter1];
+      
+      if([1280 + Mem_Page] == 1) then
+        [Process_PTBR + Counter1 + 1] = "01";
+      endif;
+      
+    else
+      if([Process_PTBR + Counter1 + 1] == "01") then
+        Mem_Page = [Process_PTBR + Counter1];
+         
+        if([1280 + Mem_Page] == 1) then
+          Flag = 1;
+          break;
+        endif;
+      endif;
+    endif;
+    
+	
+   Counter1  = Counter1 + 2;
+   endwhile;
+   
+   if(Flag == 1) then
+	break;
+   endif;
+   
+   Counter = Counter + 1;
+ endwhile;
+ 
+Counter = 3072 + 448;
+ 
+while(Counter < 3072 + 512) do
+  if([Counter] == 0) then
+    break;
+  endif;
+   
+  Counter = Counter + 1;
+endwhile;
+ 
+if(Counter >= 3072 + 512) then
+  inline "JMP 11830";
+endif;
+ 
+  Swap_Block = Counter - 3072;
+  
+store(Mem_Page,Swap_Block);
+               
+[3072 + Swap_Block] = 1;
+//---------------
+store(6,20);
+
+[Process_PTBR + Counter1] = Swap_Block;
+[Process_PTBR + Counter1 + 1] = "00";
+
+
+  Disk_Block = [PTBR + Vpagenum * 2];
+  
+load(Mem_Page,Disk_Block);
+
+if(Disk_Block >= 448) then
+  [3072 + Disk_Block] = [3072 + Disk_Block] - 1;
+  store(6,20);
+endif;
+print("exhandler3");
+[PTBR + Vpagenum * 2] = Mem_Page;
+[PTBR + Vpagenum * 2 + 1] = "11";
+
+[PhysicalSP] = Ip_addr;
+ireturn;              

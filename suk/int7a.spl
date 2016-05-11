@@ -1,0 +1,227 @@
+alias PhysicalSP S0;
+  PhysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+  
+alias SystemCallNo S1;
+  SystemCallNo = [PhysicalSP - 1];
+  
+alias CurrentPCB S5;
+  CurrentPCB = -1;
+  
+alias Counter S4;
+  Counter = 1;  
+  
+if(SystemCallNo == 14) then
+  
+  alias CurrentPID S3;
+    CurrentPID = (PTBR - 1024) / 8;
+  
+  alias Flag S5;
+    Flag = -1;  
+    
+  while(Counter < 32 * 32) do
+    //Flag = -1;
+    if([READY_LIST + Counter] == 100 + CurrentPID) then
+      [READY_LIST + Counter] = 1;
+      Flag = 0;
+    endif;
+    
+    Counter = Counter + 32;
+  endwhile;
+  
+  [PhysicalSP - 2] = Flag;
+  ireturn;
+endif;                    
+
+if(SystemCallNo == 10) then
+
+    Counter = 1;
+  
+  alias CurrentPID S3;
+    CurrentPID = (PTBR - 1024) / 8;
+  
+  while(Counter < 32 * 32) do
+    if([READY_LIST + Counter] == (100 + CurrentPID)) then
+      [READY_LIST + Counter] = 1;
+    endif;
+    
+    Counter = Counter + 32;
+  endwhile;    
+    
+  Counter = 1;
+    
+  while(Counter < 32 * 32) do
+    if([READY_LIST + Counter] == 1) then
+      break;
+    endif;
+    
+    Counter = Counter + 32;
+  endwhile;
+  
+  if(Counter > 32 * 32) then
+    halt;
+    ireturn;
+  endif;
+  
+    CurrentPCB = READY_LIST + 32 * CurrentPID;
+    
+  alias System_Wide_Index S2;
+    
+  Counter = 15;
+  
+  while(Counter < 31) do
+    if([CurrentPCB + Counter] != -1) then
+      System_Wide_Index = [CurrentPCB + Counter];
+      [FILE_TABLE + (System_Wide_Index * 2) + 1] = [FILE_TABLE + (System_Wide_Index * 2) + 1] - 1;
+      
+      if([FILE_TABLE + (System_Wide_Index * 2) + 1] == 0) then
+        [FILE_TABLE + (System_Wide_Index * 2)] = -1;
+      endif;
+      
+      [CurrentPCB + Counter] = -1;
+      [CurrentPCB + Counter + 1] = -1;
+    endif;
+    Counter = Counter + 2;
+  endwhile;
+  
+  [CurrentPCB + 1] = 0;
+  
+  alias Page_No S6;
+     
+  Counter = 0;
+  
+  while(Counter < 8) do
+    if(([PTBR + Counter + 1] == "01") || ([PTBR + Counter + 1] == "11")) then
+      Page_No = [PTBR + Counter];
+      [1280 + Page_No] = [1280 + Page_No] - 1;
+    endif;
+      
+    if(([PTBR + Counter + 1] == "00") && ([PTBR + Counter] >= 448)) then
+      Page_No = [PTBR + Counter];
+      [3072 + Page_No] = [3072 + Page_No] - 1;
+    endif;
+    
+    [PTBR + Counter + 1] = "00";
+    [PTBR + Counter] = -1;
+
+    Counter = Counter + 2;
+  endwhile;
+  
+  store(6,20);
+  
+  alias Counter1 S7;
+    Counter1 = 0;
+    
+  Counter = CurrentPID;
+  
+  while(Counter1 < 32) do
+    Counter = Counter + 1;
+    
+    if(Counter == 32) then
+      Counter = 0;
+    endif;
+    
+    CurrentPCB = READY_LIST + Counter * 32;
+    
+    if([CurrentPCB + 1] == 1) then
+      break;
+    endif;
+    
+    Counter1 = Counter1 + 1;
+  endwhile;
+  
+  [CurrentPCB + 1] = 2;
+  BP = [CurrentPCB + 2];
+  SP = [CurrentPCB + 3];
+  PTBR = [CurrentPCB + 5];
+  PTLR = [CurrentPCB + 6];
+      
+  SP = SP + 1;
+  
+  alias SP2 S8;
+    SP2 = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+    
+  [SP2] = [CurrentPCB + 4];
+  
+endif;   
+
+alias WaitingPID S2;
+  WaitingPID = [PhysicalSP - 3];
+  
+if(SystemCallNo == 13) then
+  
+  alias CurrentPID S3;
+    CurrentPID = (PTBR - 1024) / 8;
+    
+  alias WaitingPCB S7;
+    WaitingPCB = READY_LIST + WaitingPID * 32;
+    
+  if(([WaitingPCB + 1] == 0) || ([WaitingPCB + 1] == 2)) then
+    [PhysicalSP - 2] = -1;
+    ireturn;
+  endif;
+  
+  CurrentPCB = READY_LIST + CurrentPID * 32;
+    
+  [CurrentPCB + 1] = 100 + WaitingPID;
+  [CurrentPCB + 2] = BP;
+  [CurrentPCB + 3] = SP - 1;
+  [CurrentPCB + 4] = [PhysicalSP];
+  [CurrentPCB + 5] = PTBR;
+  [CurrentPCB + 6] = PTLR;
+  [CurrentPCB + 7] = R0;
+  [CurrentPCB + 8] = R1;
+  [CurrentPCB + 9] = R2;
+  [CurrentPCB + 10] = R3;
+  [CurrentPCB + 11] = R4;
+  [CurrentPCB + 12] = R5;
+  [CurrentPCB + 13] = R6;
+  [CurrentPCB + 14] = R7;
+  
+  alias Counter1 S6;
+    Counter1 = 0;
+    
+  Counter = CurrentPID;
+  
+  while(Counter1 < 32) do
+    Counter = Counter + 1;
+    
+    if(Counter == 32) then
+      Counter = 0;
+    endif;
+    
+    CurrentPCB = READY_LIST + Counter * 32;
+    
+    if([CurrentPCB + 1] == 1) then
+      break;
+    endif;
+    
+    Counter1 = Counter1 + 1;
+  endwhile;
+  
+  [CurrentPCB + 1] = 2;
+  BP = [CurrentPCB + 2];
+  SP = [CurrentPCB + 3];
+  PTBR = [CurrentPCB + 5];
+  PTLR = [CurrentPCB + 6];
+    
+  SP = SP + 1;
+  
+  alias SP2 S8;
+    SP2 = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+    
+  [SP2] = [CurrentPCB + 4];
+  
+  [PhysicalSP - 2] = 0;
+  
+endif;
+
+R0 = [CurrentPCB + 7];
+R1 = [CurrentPCB + 8];
+R2 = [CurrentPCB + 9];                                    
+R3 = [CurrentPCB + 10];
+R4 = [CurrentPCB + 11];
+R5 = [CurrentPCB + 12];
+R6 = [CurrentPCB + 13];
+R7 = [CurrentPCB + 14]; 
+
+ireturn;

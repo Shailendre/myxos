@@ -1,0 +1,140 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+alias basic_block S2;
+
+alias file_name S4;
+file_name = [physicalSP - 3];
+
+alias block S3;
+
+alias currentPID S5;
+		currentPID = (PTBR - 1024)/8;
+		
+alias currentPCB S6;
+	currentPCB = READY_LIST + 32*currentPID;
+	
+alias block_no S7;
+
+alias per_process_index S14;
+per_process_index = currentPCB + 15;
+		
+alias system_wide_index S8;
+		system_wide_index = FILE_TABLE;
+		
+alias FAT1 S9;
+	FAT1 =FAT;
+
+alias count S10;
+	count =0;
+	
+alias valid_pages S11;
+
+alias difference S12;
+
+alias counter S13;
+	counter =0;
+	
+//alias i S14;
+
+//............START EXEC SYSTEM CALL ...................//
+
+if(sysCallNo == 9) then
+	while(FAT1 < FAT+512) do
+		if([FAT1] == file_name ) then
+			basic_block = [FAT1 + 2];
+			break;
+		else
+			FAT1 = FAT1 + 8;
+		endif;
+	endwhile;
+	
+	
+	if(FAT1 >= FAT+512) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	load(1,basic_block);
+	
+	block = 0;
+//...MODIFICATION IN STEP 3 AND 4.....//
+	
+	
+	while(counter < 6) do
+		if(([PTBR + counter + 1] == "01") || ([PTBR + counter +1] == "11")) then
+			if([PTBR + counter] < 448) then
+				[PTBR + counter] = [PTBR + counter] - 1;
+			endif;
+			if([PTBR + counter] >= 448) then
+				block  = [PTBR + counter];
+				[6*512 + block] = [6+512 + counter] - 1;
+			endif;
+		endif;
+		counter = counter + 2;
+	endwhile;
+	
+	
+	counter = block;
+
+//.....LOADING BLOCKS.......//
+
+	while(counter < 3) do
+		//valid_pages = [PTBR + counter*2];
+		[PTBR + counter*2 + 1] = "00";
+		//block_no = [512 + counter];
+		//load(valid_pages,block_no);
+		counter = counter + 1;
+	endwhile;
+
+//.... CLOSING ALL FILES OPEN BY CURRENT PROCESS......//
+
+	
+	count = 0;
+	
+	while(count < 8) do
+		if([per_process_index + count*2] != -1) then
+			system_wide_index = [per_process_index + count*2];
+			[FILE_TABLE + system_wide_index * 2 + 1] = [FILE_TABLE + system_wide_index*2 + 1] - 1;
+			
+			if([FILE_TABLE + system_wide_index*2 + 1] == 0) then
+				[FILE_TABLE + system_wide_index *2 +0] =-1;
+			endif;
+			
+			[per_process_index+ count*2] = -1;
+			[per_process_index+ count*2 + 1] = -1;
+		endif;
+		count = count + 1;
+	endwhile;
+	
+	SP = 3*512;
+	physicalSP = ([PTBR + 2 *(SP / 512)] *512) + (SP%512);
+	[physicalSP] = 0;
+
+ireturn;	
+endif;
+
+currentPID = (PTBR - 1024)/8;
+
+//..........GETPID STARTS.................//
+
+if(sysCallNo == 11) then
+	currentPID = (PTBR - 1024)/8;
+	[physicalSP - 2] = currentPID;
+	ireturn;
+endif;
+
+//.........GETPID ENDS..................//
+
+//.........GETPPID STARTS...............//
+
+if(sysCallNo == 12) then
+	currentPCB = READY_LIST + 32*currentPID;
+	[physicalSP - 2] = [currentPCB + 31];
+	ireturn;
+endif;
+	
+//.........GETPPID ENDS................//
